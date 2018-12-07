@@ -1,0 +1,218 @@
+#This is code was created as a part of an assignment for the Advanced Scientific 
+#Methods in Psychology course. Code written by Natali Plazonic.
+
+#clear the workspace and graphics
+rm(list=ls(all=TRUE)) 
+graphics.off()
+
+#load packages
+library(psych) 
+library(reshape2) 
+library(ggplot2) 
+library(cAIC4) 
+library(r2glmm)
+library(lme4)
+library(influence.ME)
+library("lattice", lib.loc="~/R/win-library/3.5")
+library("latticeExtra", lib.loc="~/R/win-library/3.5")
+
+#set working directory 
+setwd("C:/Users/Natalee/Desktop/R")
+
+#load openGraph and saveGraph function
+source("GraphPlots.R")
+
+#load data
+home_sample_3 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_3.csv")
+
+#run data diagnostics 
+describe(home_sample_3) #check for coding errors
+home_sample_3$sex = as.numeric(home_sample_3$sex)
+openGraph()
+hist(home_sample_3$sex)
+openGraph()
+hist(home_sample_3$age)
+openGraph()
+hist(home_sample_3$STAI_trait)
+openGraph()
+hist(home_sample_3$pain_cat)
+openGraph()
+hist(home_sample_3$mindfulness)
+openGraph()
+hist(home_sample_3$weight)
+openGraph()
+hist(home_sample_3$cortisol_serum)
+openGraph()
+hist(home_sample_3$cortisol_saliva)
+
+#asign ID as factor
+home_sample_3$ID = factor(home_sample_3$ID)
+
+#specify the repeated varibales
+repeated_variables = c("pain1", "pain2", "pain3", "pain4")
+
+#convert the dataframe from wide to long format
+home_sample_long = melt(home_sample_3, measure.vars = repeated_variables,
+variable.name = "time", value.name = "pain")
+
+#change the time variable to a numerical vector
+home_sample_long$time = as.numeric(home_sample_long$time)
+
+#change the sex variable to a numerical vector
+home_sample_long$sex = as.numeric(home_sample_long$sex)
+
+#fit a random intercept model including the fixed effects of age, sex, STAI, pain catastrophizing, mindfulness, serum cortisol, time, and a random intercept for participant ID 
+int.model <- lmer(pain ~ age + sex + STAI_trait + pain_cat + mindfulness +
+                     cortisol_serum + time + (1|ID), home_sample_long)
+
+#fit a random intercept model including the fixed effects of age, sex, STAI, pain catastrophizing, mindfulness, serum cortisol, time, random intercept for participant ID and random slope over time for each participant 
+int.slopemodel <- lmer(pain ~ age + sex + STAI_trait + pain_cat + mindfulness +
+                       cortisol_serum + time + (time|ID), home_sample_long)
+
+#create new equal data
+home_sample_long_withpreds = home_sample_long
+
+#save predicted values into new variables
+home_sample_long_withpreds$pred_int <- predict(int.model)
+home_sample_long_withpreds$pred_slope <- predict(int.slopemodel)
+
+#plot the pain ratings over time for each participant separately in separate panels in a single graph with the regression line of the int.model
+openGraph()
+ggplot(home_sample_long_withpreds, aes(y = pain, x = time,
+                            group = ID)) + geom_point(size = 3) + 
+                            geom_line(color = "red", 
+                            aes(y = pred_int, x = time)) + 
+                            facet_wrap(~ID, ncol = 5)
+
+#plot the pain ratings over time for each participant separately in separate panels in a single graph with the regression line of the intslope.model
+openGraph()
+ggplot(home_sample_long_withpreds, aes(y = pain, x = time, 
+                                      group = ID)) + geom_point(size = 3) + 
+                                      geom_line(color = "red", 
+                                      aes(y = pred_slope, x = time)) + 
+                                      facet_wrap(~ID, ncol = 5)
+
+#compare using cAIC
+cAIC(int.model)$caic
+cAIC(int.slopemodel)$caic
+
+#build a new model containing the quadratic term of time
+quad.model <- lmer(pain ~ age + sex + STAI_trait + pain_cat + mindfulness +
+                     cortisol_serum + time + I(time^2) + (1|ID), 
+                   home_sample_long)
+
+#save predicted values into new variables
+home_sample_long_withpreds$pred_quad = predict(quad.model)
+
+#plot quad.model
+openGraph()
+ggplot(home_sample_long_withpreds, aes(y = pain, x = time, group = ID)) + 
+                                geom_point(size = 3) + geom_line(color = "red",
+                                aes(y = pred_quad, x = time)) + 
+                                facet_wrap(~ID, ncol = 5)
+
+#center the variable time
+data_time_centered = home_sample_long_withpreds
+data_time_centered$time_centered = data_time_centered$time - 
+                                mean(data_time_centered$time)
+
+#refit quad.model model with the centered time
+quad.model = lmer(pain ~ age + sex + STAI_trait + pain_cat + mindfulness +
+                    cortisol_serum + time_centered + I(time_centered^2) +
+                          (time | ID), data = data_time_centered)
+
+#run Marginal R squared
+r2beta(quad.model, method = "nsj", data = data_time_centered)
+
+#print results for quad.model
+summary(quad.model)
+
+
+#create a copy of the data and save the residuals in the new variable
+home_sample_long_with_resid = data_time_centered
+home_sample_long_with_resid$resid = residuals(quad.model)
+
+#save the sqared time as a new variable.
+home_sample_long_with_resid$time_centered_2 = home_sample_long_with_resid$time_centered^2
+
+#run model diagnostics for quad.model
+##check data for influential outliers
+influence_observation = influence(quad.model, obs = T)$alt.fixed
+influence_group = influence(quad.model, group = "ID")$alt.fixed
+openGraph()
+boxplot(influence_observation[, "age"])
+openGraph()
+boxplot(influence_observation[, "sex"])
+openGraph()
+boxplot(influence_observation[, "STAI_trait"])
+openGraph()
+boxplot(influence_observation[, "pain_cat"])
+openGraph()
+boxplot(influence_observation[, "mindfulness"])
+openGraph()
+boxplot(influence_observation[, "cortisol_serum"])
+openGraph()
+boxplot(influence_observation[, "time_centered"])
+openGraph()
+boxplot(influence_observation[, "I(time_centered^2)"])
+
+##check normality of the residuals and random effects
+openGraph()
+qqmath(quad.model, id = 0.05)
+openGraph()
+qqmath(ranef(quad.model))
+
+#check linearity of the relationship of the fixed effect predictors and the outcome
+openGraph()
+plot(quad.model, arg = "pearson")
+##check linearity of the relationship of the fixed effect predictors and residuals
+openGraph()
+plot(resid ~ age, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ sex, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ STAI_trait, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ pain_cat, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ mindfulness, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ cortisol_serum, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ time_centered, data = home_sample_long_with_resid)
+openGraph()
+plot(resid ~ time_centered_2, data = home_sample_long_with_resid)
+
+##check homoscedasticity
+openGraph()
+plot(quad.model, arg = "pearson")
+### check for homoscedasticity across clusters as well
+homosc = lm(home_sample_long_with_resid$resid^2 ~ home_sample_long_with_resid$ID)
+summary(homosc)
+
+##check for multicollinearity of the fixed effect predictors
+openGraph()
+pairs.panels(home_sample_long_with_resid[, c("age", "sex", "STAI_trait", 
+                                             "pain_cat", "mindfulness", "cortisol_serum", "time_centered", 
+                                             "time_centered_2")], col = "red", lm = T)
+
+#print 95% confidence intervals for coefficients of the predictors
+confint(quad.model)
+
+#create stdCoef.merMod
+stdCoef.merMod <- function(object) {
+  sdy <- sd(getME(object,"y"))
+  sdx <- apply(getME(object,"X"), 2, sd)
+  sc <- fixef(object)*sdx/sdy
+  se.fixef <- coef(summary(object))[,"Std. Error"]
+  se <- se.fixef*sdx/sdy
+  return(data.frame(stdcoef=sc, stdse=se))
+}
+
+#print standardized regression coefficients
+stdCoef.merMod(quad.model)
+
+#compare all three models using cAIC
+cAIC(int.model)$caic
+cAIC(int.slopemodel)$caic
+cAIC(quad.model)$caic
