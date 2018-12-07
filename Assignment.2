@@ -1,0 +1,115 @@
+#This is code was created as a part of an assignment for the Advanced Scientific 
+#Methods in Psychology course. Code written by Natali Plazonic.
+
+#clear the workspace and graphics
+rm(list=ls(all=TRUE)) 
+graphics.off()
+
+#load packages
+require(psych)
+require(car)
+require(lsr)
+
+#set working directory 
+setwd("C:/Users/Natalee/Desktop/R")
+
+#load openGraph and saveGraph function
+source("GraphPlots.R") 
+
+#load data 
+data_sample_1 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_1.csv") 
+data_sample_1 <- data_sample_1[-c(28, 112, 146),]
+
+#run data diagnostics 
+describe(data_sample_1) #check for coding errors
+openGraph()
+hist(data_sample_1$age)
+openGraph()
+hist(data_sample_1$STAI_trait)
+openGraph()
+hist(data_sample_1$pain_cat)
+openGraph()
+hist(data_sample_1$mindfulness)
+openGraph()
+hist(data_sample_1$weight)
+openGraph()
+hist(data_sample_1$cortisol_serum)
+openGraph()
+hist(data_sample_1$cortisol_saliva)
+
+#build a model containing age, sex, STAI, pain catastrophizing, serum cortisol measure, mindfulness and weight as predictors of pain
+initialmodel <- lm (formula = pain ~ sex + age + STAI_trait + 
+                      pain_cat + cortisol_serum + mindfulness + 
+                      weight, data = data_sample_1)
+
+#build a backward regression model from initialmodel
+step( object = initialmodel, 
+      direction = "backward")
+backwardmodel <- lm(formula = pain ~ sex + age + pain_cat + cortisol_serum + 
+                      mindfulness, data = data_sample_1) #name the new model
+
+#run model diagnostics for initialmodel and backwardmodel
+openGraph()
+hist( x = residuals( initialmodel ), xlab = "Value of residual", main = "", 
+      breaks = 20) #check normality of the residuals
+openGraph()
+hist( x = residuals( backwardmodel ), xlab = "Value of residual", main = "", 
+      breaks = 20)
+openGraph()
+plot(x = initialmodel, which = 1) #check linearity of the relationship
+openGraph()
+plot(x = backwardmodel, which = 1)
+openGraph()
+plot(x = initialmodel, which = 3) #check homoscedasticity
+openGraph()
+plot(x = backwardmodel, which = 3)
+vif( initialmodel ) #check  excess multicollinearity
+vif( backwardmodel )
+
+#build a theory based model containing age, sex, STAI, pain catastrophizing, serum cortisol measures and mindfulness as predictors of pain
+theorybasedmodel <- lm( formula = pain ~ sex + age + STAI_trait + pain_cat + 
+                          cortisol_serum + mindfulness, data = data_sample_1)
+
+#print results of backwardmodel
+summary(backwardmodel)
+summary(theorybasedmodel)
+
+#print 95% confidence intervals for coefficients of the predictors 
+confint( object = backwardmodel, level = .95)
+
+#print standardized regression coefficients 
+standardCoefs( backwardmodel )
+
+#compare the initalmodel and backwardmodel
+AIC( initialmodel, backwardmodel )
+anova (initialmodel, backwardmodel )
+
+#compare the backwardmodel and theorybasedmodel
+AIC( backwardmodel, theorybasedmodel )
+anova (backwardmodel, theorybasedmodel)
+
+#load new data
+home_sample_2 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_2.csv")
+describe(home_sample_2)
+table(home_sample_2$sex)
+
+#test backwardmodel and theorybasedmodel on the new data
+pred.backward <- predict(backwardmodel, home_sample_2)
+pred.theory <- predict(theorybasedmodel, home_sample_2)
+
+#calculate absolute differences between predicted and real values of pain 
+absbackward <- abs(predict(backwardmodel, home_sample_2)-home_sample_2$pain)^2
+mean(pred.backward)
+abstheory <- abs(predict(theorybasedmodel, home_sample_2)-home_sample_2$pain)^2
+mean(pred.theory)
+
+#calculate the sum of squared residuals
+errorbackward = sum((home_sample_2[, "pain"] - pred.backward)^2)
+errortheory = sum((home_sample_2[, "pain"] - pred.theory)^2)
+errorbackward
+errortheory
+
+#difference in error between absbackward and abstheory
+errorbackward - errortheory
+
+
