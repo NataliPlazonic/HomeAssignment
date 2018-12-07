@@ -1,0 +1,107 @@
+#This is code was created as a part of an assignment for the Advanced Scientific Methods in Psychology course. Code written by Natali Plazonic.
+
+#clear the workspace and graphics
+rm(list=ls(all=TRUE)) 
+graphics.off()
+
+#load packages
+require(psych)
+require(car)
+require(lsr)
+
+#set working directory 
+setwd("C:/Users/Natalee/Desktop/R")
+
+#load openGraph and saveGraph function
+source("GraphPlots.R") 
+
+#load data 
+data_sample_1 = read.csv("https://raw.githubusercontent.com/kekecsz/PSYP13_Data_analysis_class-2018/master/home_sample_1.csv") 
+describe(data_sample_1)
+table(data_sample_1$sex)
+
+#build a model containing age and sex as predictors of pain 
+model1 <- lm( formula = pain ~ sex + age, data = data_sample_1)
+
+#build a model containing age, sex, STAI, pain catastrophizing, mindfulness, and cortisol measures as predictors of pain
+model2 <- lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+              + cortisol_saliva + mindfulness, data = data_sample_1)
+
+#run data and 
+describe(data_sample_1) #check for coding errors
+data_sample_1$sex = as.numeric(data_sample_1$sex)
+openGraph()
+hist(data_sample_1$sex)
+openGraph()
+hist(data_sample_1$age)
+openGraph()
+hist(data_sample_1$STAI_trait)
+openGraph()
+hist(data_sample_1$pain_cat)
+openGraph()
+hist(data_sample_1$mindfulness)
+openGraph()
+hist(data_sample_1$weight)
+openGraph()
+hist(data_sample_1$cortisol_serum)
+openGraph()
+hist(data_sample_1$cortisol_saliva)
+
+#clean the data
+print(data_sample_1[data_sample_1$mindfulness<1,]) #screening participants that have scores lower than 1 on the mindfulness variable
+print(data_sample_1[data_sample_1$age>90,]) #screening participants that have scores higher that 90 on the age variable
+data_sample_1 <- data_sample_1[-c(28, 112, 146),] #exclude participants with coding errors
+describe(data_sample_1) #check for coding errors after excluding participants
+
+#run model diagnostics
+model2 <- lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+              + cortisol_saliva + mindfulness, data = data_sample_1) #rerun model2 after excluding participants
+openGraph()
+plot(x = model2, which = 4) #check for influential outliners using Cook's distance
+lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+    + cortisol_saliva + mindfulness, data = data_sample_1, subset = -44) #rerun the model without participant 44
+lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+    + cortisol_saliva + mindfulness, data = data_sample_1, subset = -51) #rerun the model without participant 44
+lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+    + cortisol_saliva + mindfulness, data = data_sample_1, subset = -71) #rerun the model without participant 44
+model1 <- lm( formula = pain ~ sex + age, data = data_sample_1) #rerun model1 with changed data set
+
+#check the final models' assumptions of linear regression
+openGraph()
+hist( x = residuals( model2 ), xlab = "Value of residual", main = "", 
+      breaks = 20) #check normality of the residuals
+openGraph()
+plot(x = model2, which = 1) #check linearity of the relationship
+openGraph()
+plot(x = model2, which = 3) #check homoscedasticity
+vif( model2 ) #check  excess multicollinearity 
+
+#rerun model2 after excluding cortisol_saliva variable
+model2 <- lm( formula = pain ~ sex + age + STAI_trait + pain_cat + cortisol_serum
+               + mindfulness, data = data_sample_1) 
+
+#recheck the final models' assumptions of linear regression
+openGraph()
+hist( x = residuals( model2 ), xlab = "Value of residual", main = "", 
+      breaks = 20) #recheck normality of the residuals
+openGraph()
+plot(x = model2, which = 1) #recheck linearity of the relationship
+openGraph()
+plot(x = model2, which = 3) #recheck homoscedasticity
+vif( model2 ) #recheck excess multicollinearity
+
+#print results of model1 and model2
+summary(model1)
+summary(model2)
+
+#print 95% confidence intervals for coefficients of the predictors 
+confint( object = model1, level = .95)
+confint( object = model2, level = .95)
+
+#print standardized regression coefficients 
+standardCoefs( model1 )
+standardCoefs( model2 )
+
+#compare model1 and model2
+AIC(model1, model2) #using AIc
+anova(model1, model2) #using ANOVA
